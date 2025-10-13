@@ -1,0 +1,91 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Dream Recorder Demo</title>
+  <style>
+    body{font-family:Arial,Helvetica,sans-serif;margin:20px}
+    .col{display:inline-block;vertical-align:top;width:48%;margin:1%}
+    #results img{max-width:100%}
+    input[type=file]{display:block;margin-bottom:8px}
+    button{padding:8px 12px}
+    pre{background:#f3f3f3;padding:10px;border-radius:6px}
+  </style>
+</head>
+<body>
+  <h1>Dream Recorder — Demo Frontend</h1>
+  <div>
+    <label>fMRI file (.nii/.nii.gz): <input id="fmri" type="file" accept=".nii,.nii.gz"/></label>
+    <label>EEG file (.csv/.edf): <input id="eeg" type="file" accept=".csv,.edf"/></label>
+    <label>EEG epoch sec: <input id="epoch" type="number" value="2" min="0.5" step="0.1"/></label>
+    <label>Number ROIs: <input id="nrois" type="number" value="6" min="1"/></label>
+    <button id="uploadBtn">Upload & Process</button>
+  </div>
+
+  <h2>Results</h2>
+  <div id="status"></div>
+  <div id="results">
+    <div class="col"><h3>Brain</h3><div id="brainContainer"></div></div>
+    <div class="col"><h3>EEG</h3><div id="eegContainer"></div></div>
+    <div style="clear:both"></div>
+    <div><h3>Reconstruction</h3><div id="reconContainer"></div></div>
+    <h3>Metadata</h3><pre id="meta"></pre>
+  </div>
+
+<script>
+const API_URL = "https://REPLACE_WITH_YOUR_BACKEND_URL/api/process";
+document.getElementById("uploadBtn").addEventListener("click", async () => {
+  const fmri = document.getElementById("fmri").files[0];
+  const eeg = document.getElementById("eeg").files[0];
+  const epoch = parseFloat(document.getElementById("epoch").value) || 2.0;
+  const nrois = parseInt(document.getElementById("nrois").value) || 6;
+  if (!fmri || !eeg) {
+    alert("Please select both fMRI and EEG files.");
+    return;
+  }
+  const form = new FormData();
+  form.append("fmri", fmri);
+  form.append("eeg", eeg);
+  form.append("eeg_epoch_sec", epoch);
+  form.append("n_rois", nrois);
+  document.getElementById("status").innerText = "Uploading and processing...";
+  try {
+    const resp = await fetch(API_URL, { method: "POST", body: form });
+    if (!resp.ok) {
+      const txt = await resp.text();
+      throw new Error("Server error: " + txt);
+    }
+    const j = await resp.json();
+    document.getElementById("meta").innerText = JSON.stringify({
+      fmri_shape: j.fmri_shape,
+      fmri_tr: j.fmri_tr,
+      eeg_sfreq: j.eeg_sfreq,
+      fmri_feats_shape: j.fmri_feats_shape,
+      eeg_feats_shape: j.eeg_feats_shape,
+      fused_shape: j.fused_shape,
+      recon_label: j.recon_label
+    }, null, 2);
+    if (j.brain_png_b64) {
+      document.getElementById("brainContainer").innerHTML = "<img src='data:image/png;base64," + j.brain_png_b64 + "'/>";
+    } else {
+      document.getElementById("brainContainer").innerText = "No brain image";
+    }
+    if (j.eeg_png_b64) {
+      document.getElementById("eegContainer").innerHTML = "<img src='data:image/png;base64," + j.eeg_png_b64 + "'/>";
+    } else {
+      document.getElementById("eegContainer").innerText = "No EEG image";
+    }
+    if (j.recon_png_b64) {
+      document.getElementById("reconContainer").innerHTML = "<img src='data:image/png;base64," + j.recon_png_b64 + "'/>";
+    } else {
+      document.getElementById("reconContainer").innerText = "No reconstruction";
+    }
+    document.getElementById("status").innerText = "Done";
+  } catch (err) {
+    document.getElementById("status").innerText = "Error: " + err.message;
+  }
+});
+</script>
+</body>
+</html>
